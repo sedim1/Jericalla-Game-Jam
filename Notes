@@ -1,0 +1,18 @@
+walls ar 90 degres
+walls are cubes 
+floor is alway flat
+
+Projection attributes - defined by us
+ Player height can be defined here by us or by wallheight / 2
+ FOV = how wide the player sees the world in front of him 
+ Player pos
+
+Projection plane = basically our screen, part f our screen, you can see it as the window size of the camera
+projectionPlaneWidth will define how many columns are going to be drawn on the  screen
+
+
+ 
+RelationShip between player and projection plane
+distanceFrom player to ProjectionPlane = (PROJECTION_PLANE_WIDTH/2)/tan(FOV/2) 
+
+Angle between subsequent rays = FOV / PROJECTION_PLANE_WIDTH
