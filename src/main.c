@@ -4,7 +4,7 @@
 #include <math.h>
 #include "game.h"
 #include "Textures/MapChecker.h"
-#include "Textures/walls.h"
+#include "Textures/walls.ppm"
 #include "Textures/floors.h"
 #include "Textures/ceiling.ppm"
 #include "glad/glad.h"
@@ -23,21 +23,25 @@ void drawPlayer();
 void drawRays3D();
 void drawTextureMap();
 
+void drawSprite(Sprite* s);
+void drawSpriteOnMap(Sprite* s);
+
+
 void movePlayer();
 
 Keys key = {0,0,0,0};
 Player p;
 float pSpeed = 5.0f, rotSpeed = 5.0f;
-
+Sprite obj;
 
 GLFWwindow* window;
 
-int SCREEN_WIDTH= 1024;
+int SCREEN_WIDTH= 800;
 int SCREEN_HEIGHT= 640;
 
 //PROJECTION ATTRIBUTES
-const int PROJECTION_WIDTH =  500;
-const int PROJECTION_HEIGHT = 512;
+const int PROJECTION_WIDTH =  800;
+const int PROJECTION_HEIGHT = 640;
 int PW2;
 int PH2;
 int rays;
@@ -85,7 +89,7 @@ bool init(){
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
 
-    glOrtho(0,SCREEN_WIDTH,SCREEN_HEIGHT,0,-1,1);
+    glOrtho(0,SCREEN_WIDTH,SCREEN_HEIGHT,0,-2,2);
 
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
@@ -97,10 +101,10 @@ bool init(){
     glfwSetFramebufferSizeCallback(window, frameBufferSizeCallback); 
 
     p.x =300.0f; p.y = 300.0f; p.a = 3*M_PI/2; p.dx = cos(p.a); p.dy = sin(p.a);
+    obj.x = 64+32; obj.y = 64+32; obj.z = 20;
 
     //Start Projection Attributes
     rayStep = (FOV/PROJECTION_WIDTH) * PIXELSCALE;
-    //rayStep = (FOV/PIXELSCALE);
     distFromProjectionPlane = (PROJECTION_WIDTH/2)/tan((FOV/2));
     PW2 = PROJECTION_WIDTH/2;
     PH2 = PROJECTION_HEIGHT/2;
@@ -133,8 +137,9 @@ void display(){
     glClearColor(0.0f,0.4f,0.3f,1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     drawPlayer();
-    drawRays3D();
+    drawSpriteOnMap(&obj);
     drawMap2D();
+    drawRays3D();
     glfwPollEvents();
     glfwSwapBuffers(window);
 }
@@ -146,10 +151,10 @@ void drawMap2D(){
         for(int x = 0; x < mapWidth; x++){
             if(walls[y][x] > 0) { c = 1.0f; } else { c = 0.5f;}
             glColor3f(c,c,c);
-            p1[0] = (x * CELLSIZE) + 1; p1[1] = (y * CELLSIZE) + 1;
-            p2[0] = (x * CELLSIZE) + 1; p2[1] = (y * CELLSIZE) + CELLSIZE - 1;
-            p3[0] = (x * CELLSIZE) + CELLSIZE - 1; p3[1] = (y * CELLSIZE) + 1;
-            p4[0] = (x * CELLSIZE) + CELLSIZE - 1; p4[1] = (y * CELLSIZE) + CELLSIZE - 1;
+            p1[0] = (x * (CELLSIZE/4)) + 1; p1[1] = (y * (CELLSIZE)/4) + 1;
+            p2[0] = (x * (CELLSIZE/4)) + 1; p2[1] = (y * (CELLSIZE/4)) + (CELLSIZE/4) - 1;
+            p3[0] = (x * CELLSIZE/4) + (CELLSIZE/4) - 1; p3[1] = (y * (CELLSIZE/4)) + 1;
+            p4[0] = (x * (CELLSIZE/4)) + (CELLSIZE/4) - 1; p4[1] = (y * (CELLSIZE/4)) + (CELLSIZE/4) - 1;
             glBegin(GL_TRIANGLES);
             glVertex2i(p1[0],p1[1]); glVertex2i(p2[0],p2[1]); glVertex2i(p3[0],p3[1]); 
             glVertex2i(p2[0],p2[1]); glVertex2i(p3[0],p3[1]); glVertex2i(p4[0],p4[1]); 
@@ -159,19 +164,38 @@ void drawMap2D(){
 }
 
 void drawPlayer(){
-    glPointSize(8); glLineWidth(2); glColor3f(0.0f,1.0f,1.0f);
-    glBegin(GL_POINTS); glVertex2i(p.x,p.y); glEnd();
-    glBegin(GL_LINES); glVertex2f(p.x,p.y); glVertex2f(p.x + p.dx * 20,p.y + p.dy * 20); glEnd();
+    glPointSize(4); glLineWidth(2); glColor3f(0.0f,1.0f,1.0f);
+    glBegin(GL_POINTS); glVertex3i(p.x/4,p.y/4,2); glEnd();
+    glBegin(GL_LINES); glVertex3i(p.x/4,p.y/4,2); glVertex3i((p.x/4 + p.dx * 10),(p.y/4 + p.dy * 10),2); glEnd();
 }
+
+void drawSpriteOnMap(Sprite* p){
+    glPointSize(4); glLineWidth(2); glColor3f(1.0f,0.0f,0.0f);
+    glBegin(GL_POINTS); glVertex3i(p->x/4,p->y/4,2); glEnd();
+    glBegin(GL_LINES); glVertex3i(p->x/4,p->y/4,2); glVertex3i((p->x/4),(p->y/4),2); glEnd();
+}
+
 
 void drawTextureMap(){
     for(int v = 0; v < TEXTURE; v++){
         for(int u = 0; u < TEXTURE; u++){
             float c = mapCheckerTexture[v * CELLSIZE +  u];
             glColor3f(c,c,c); glPointSize(PIXELSCALE);
-            glBegin(GL_POINTS); glVertex2i(u*PIXELSCALE,v*PIXELSCALE); glEnd();
+            glBegin(GL_POINTS); glVertex3i(u*PIXELSCALE,v*PIXELSCALE,2); glEnd();
         }
     }
+}
+
+void drawSprite(Sprite* s){
+    float dx = s->x - p.x;
+    float dy = s->y - p.y;
+    float sinA = sinf(-p.a); float cosA = cosf(-p.a);
+    float transformX = dx * cosA - dy * sinA;
+    float transformY = dx * sinA + dy * cosA;
+    float spriteScreenX = (PW2) + (transformX * (PW2 / transformY));
+    glPointSize(PIXELSCALE); glColor3ub(255,255,0);
+    glBegin(GL_POINTS);glVertex3i(spriteScreenX,PH2,2);glEnd();
+    //glBegin(GL_POINTS);glVertex2i(0,0);glEnd();
 }
 
 void drawRays3D(){
@@ -187,10 +211,10 @@ void drawRays3D(){
         if(ra == 0 || ra == M_PI){ ra+=0.00000001f;}
         if(ra > M_PI ){ hry = ((int)(p.y/CELLSIZE))*CELLSIZE - 0.0001f; hrx = p.x - (p.y - hry)/tan(ra); yo = -CELLSIZE; xo = -CELLSIZE/tan(ra); }//Looking up
         if(ra < M_PI ){ hry = ((int)(p.y/CELLSIZE))*CELLSIZE + CELLSIZE; hrx = p.x - (p.y - hry)/tan(ra); yo = CELLSIZE; xo = CELLSIZE/tan(ra); }//Looking down
-            while(dof < 8){
+            while(dof < 15){
                 mx = (int)(hrx/CELLSIZE); my = (int)(hry/CELLSIZE); // get grid position o
                 if(mx >= 0 && mx < mapWidth && my >= 0 && my < mapHeight){
-                    if(walls[my][mx] > 0){ dof = 8; distH = distance(p.x,hrx,p.y,hry); hm = walls[my][mx]-1;}
+                    if(walls[my][mx] > 0){ dof = 15; distH = distance(p.x,hrx,p.y,hry); hm = walls[my][mx]-1;}
                     else{ hrx += xo; hry += yo; dof+=1; }
                 }
                 else { hrx += xo; hry += yo; dof+=1;}
@@ -206,10 +230,10 @@ void drawRays3D(){
         if( ra < 3*M_PI/2 && ra > M_PI/2  ){ //left
             vrx = ((int)(p.x/CELLSIZE))*CELLSIZE - 0.0001f; vry = p.y - (p.x-vrx)*tan(ra); xo = -CELLSIZE; yo= -CELLSIZE*tan(ra);
         }
-        while(dof < 8){
+        while(dof < 15){
                 mx = (int)(vrx/CELLSIZE); my = (int)(vry/CELLSIZE); // get grid position o
                 if(mx >= 0 && mx < mapWidth && my >= 0 && my < mapHeight){
-                    if(walls[my][mx] > 0){ dof = 8; distV = distance(p.x,vrx,p.y,vry); vm = walls[my][mx]-1; }
+                    if(walls[my][mx] > 0){ dof = 15; distV = distance(p.x,vrx,p.y,vry); vm = walls[my][mx]-1; }
                     else { vrx += xo; vry += yo; dof+=1;}
                 }
                 else { vrx += xo; vry += yo; dof+=1;}
@@ -218,36 +242,29 @@ void drawRays3D(){
         //save the ray with the shortest distance
         if(distV < distH){dist=distV; rx = vrx; ry = vry; shade = 1.0f; mapVal = vm;}
         else{dist=distH; rx = hrx; ry = hry; shade = 0.5f; mapVal = hm;}
-        glLineWidth(2); glColor3f(1.0f,0.0f,0.0f);
-        glBegin(GL_LINES); glVertex2i(p.x,p.y); glVertex2i(rx,ry); glEnd();
-
         //Start drawing the walls
         float correctedDist = dist * cos(radiansAdjust(p.a - ra));
-
         int projectedSliceHeight = (CELLSIZE/correctedDist) * distFromProjectionPlane;
         float ty = 0, tyStep = TEXTURE/(float)projectedSliceHeight,tyOffset = 0.0f;
         if(projectedSliceHeight > PROJECTION_HEIGHT){ tyOffset = (projectedSliceHeight-PROJECTION_HEIGHT)/2.0;projectedSliceHeight = PROJECTION_HEIGHT;}
         int lineOffset = PH2 - (projectedSliceHeight/2);
         int lineOffsetEnd = PH2 + (projectedSliceHeight/2);
-        ty = (tyOffset * tyStep) + mapVal*TEXTURE;
+        ty = (tyOffset * tyStep);
         float tx = 0;
         if(dist == distH) { tx = (int)(rx/2)%TEXTURE; if(ra < M_PI){tx = NTEX - tx;}}
         if(dist == distV) { tx = (int)(ry/2)%TEXTURE; if(ra > PI2 && ra < PI3){tx = NTEX - tx;}}
         for(int y = 0; y < projectedSliceHeight; y++){ 
-            float rgb[3] = {1.0};
-            float c = 1.0f * shade;
-            if(tx >= 0 && ty >=0 ) {
-                int pixel = ((int)ty * TEXTURE + (int)tx) * 3 + (mapVal*TEXTURE*TEXTURE*3);
-                rgb[0] = wallTextures[pixel+0] * shade;
-                rgb[1] = wallTextures[pixel+1] * shade;
-                rgb[2] = wallTextures[pixel+2] * shade;
+            if(mapVal >= 0){
+                float rgb[3] = {1.0};
+                int pixel = ((int)ty * TEXTURE + (int)tx) * 3 + (mapVal*32*32*3);
+                rgb[0] = wallTex[pixel+0] * shade; rgb[1] = wallTex[pixel+1] * shade; rgb[2] = wallTex[pixel+2] * shade;
+                glColor3ub(rgb[0],rgb[1],rgb[2]); glPointSize(PIXELSCALE);
+                glBegin(GL_POINTS); glVertex3i(r*PIXELSCALE,y + lineOffset,0); glEnd();
+                ty+=tyStep;
             }
-            glColor3ub(rgb[0],rgb[1],rgb[2]); glPointSize(PIXELSCALE);
-            glBegin(GL_POINTS); glVertex2i(520+r*PIXELSCALE,y + lineOffset); glEnd();
-            ty+=tyStep;
         }
         int i = 0, topY = PH2 - (projectedSliceHeight/2);
-        //draw floors
+        //draw floors and ceiling
         for(int y = lineOffset + projectedSliceHeight; y < PROJECTION_HEIGHT; y++){
             float straightDistToP = (TEXTURE * distFromProjectionPlane)/((y)-PH2); //sttraight distance from player to floor point
             float beta = ra - p.a; beta = radiansAdjust(beta);
@@ -256,26 +273,29 @@ void drawRays3D(){
             float floorY = p.y + sin(ra) * actualDistanceToFloor;
             int iFloorX = (int)(floorX/CELLSIZE); int iFloorY = (int)(floorY/CELLSIZE);
             //get tex coords
-            if(iFloorX >= 0 && iFloorY >= 0 && iFloorX < mapWidth && iFloorY < mapHeight && walls[iFloorY][iFloorX]==0){
                 int rgb[3] = {0};
-                mapVal = floors[iFloorY][iFloorX];
-                int floorTx = (int)(floorX * TEXTURE  / (CELLSIZE))%TEXTURE; int floorTy = (int)(floorY * TEXTURE / (CELLSIZE))%TEXTURE;
-                int pixel = ((int)floorTy * TEXTURE + (int)floorTx) * 3 + (mapVal*TEXTURE*TEXTURE*3);
-                rgb[0] = texturedFloors[pixel+0] * 0.7f;
-                rgb[1] = texturedFloors[pixel+1] * 0.7f;
-                rgb[2] = texturedFloors[pixel+2] * 0.7f;
-                glColor3ub(rgb[0],rgb[1],rgb[2]); glPointSize(PIXELSCALE);
-                glBegin(GL_POINTS); glVertex2i(520+r*PIXELSCALE,y); glEnd();
+                if(iFloorX >= 0 && iFloorY >= 0 && iFloorX < mapWidth && iFloorY < mapHeight){
+                    int fmapVal = floors[iFloorY][iFloorX];
+                    int floorTx = (int)(floorX * TEXTURE  / (CELLSIZE))%TEXTURE; int floorTy = (int)(floorY * TEXTURE / (CELLSIZE))%TEXTURE;
+                    int pixel = ((int)floorTy * TEXTURE + (int)floorTx) * 3 + (fmapVal*TEXTURE*TEXTURE*3);
+                    rgb[0] = texturedFloors[pixel+0] * 0.7f;
+                    rgb[1] = texturedFloors[pixel+1] * 0.7f;
+                    rgb[2] = texturedFloors[pixel+2] * 0.7f;
+                    glColor3ub(rgb[0],rgb[1],rgb[2]); glPointSize(PIXELSCALE);
+                    glBegin(GL_POINTS); glVertex3i(r*PIXELSCALE,y,0); glEnd();
+                }
                 //Draw ceiling
-                mapVal = ceiling[iFloorY][iFloorX]-1;
-                pixel = ((int)floorTy * TEXTURE + (int)floorTx) * 3 + (mapVal*TEXTURE*TEXTURE*3);
-                rgb[0] = texturedCeiling[pixel+0] * 0.7f;
-                rgb[1] = texturedCeiling[pixel+1] * 0.7f;
-                rgb[2] = texturedCeiling[pixel+2] * 0.7f;
-                glColor3ub(rgb[0],rgb[1],rgb[2]); glPointSize(PIXELSCALE);
-                glBegin(GL_POINTS); glVertex2i(520+r*PIXELSCALE,topY - i); glEnd();
+                int cmapVal = ceiling[iFloorY][iFloorX]-1;
+                if(cmapVal >= 0 && iFloorX >= 0 && iFloorY >= 0 && iFloorX < mapWidth && iFloorY < mapHeight) { 
+                    int floorTx = (int)(floorX * TEXTURE  / (CELLSIZE))%TEXTURE; int floorTy = (int)(floorY * TEXTURE / (CELLSIZE))%TEXTURE;
+                    int pixel = ((int)floorTy * TEXTURE + (int)floorTx) * 3 + (cmapVal*TEXTURE*TEXTURE*3);
+                    rgb[0] = texturedCeiling[pixel+0] * 0.7f;
+                    rgb[1] = texturedCeiling[pixel+1] * 0.7f;
+                    rgb[2] = texturedCeiling[pixel+2] * 0.7f;
+                    glColor3ub(rgb[0],rgb[1],rgb[2]); glPointSize(PIXELSCALE);
+                    glBegin(GL_POINTS); glVertex3i(r*PIXELSCALE,topY - i,0); glEnd();
+                }
                 i++;
-            }
         }
         ra += rayStep; ra = radiansAdjust(ra);
     }

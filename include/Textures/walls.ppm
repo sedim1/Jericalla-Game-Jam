@@ -1,6 +1,4 @@
-#ifndef WALLS_H
-#define WALLS_H
-int wallTextures [] = {255,
+int wallTex[] = {255,
 0,
 77,
 126,
@@ -9215,5 +9213,4 @@ int wallTextures [] = {255,
 83,
 126,
 37,
-83,}
-#endif
+83,};
