@@ -4,6 +4,7 @@
 #include <math.h>
 #include "game.h"
 #include "Textures/MapChecker.h"
+#include "Textures/walls.h"
 #include "glad/glad.h"
 #include <GLFW/glfw3.h>
 
@@ -18,6 +19,7 @@ void ProcessInput();
 void drawMap2D();
 void drawPlayer();
 void drawRays3D();
+void drawTextureMap();
 
 void movePlayer();
 
@@ -32,8 +34,8 @@ int SCREEN_WIDTH= 1024;
 int SCREEN_HEIGHT= 640;
 
 //PROJECTION ATTRIBUTES
-const int PROJECTION_WIDTH =  450;
-const int PROJECTION_HEIGHT = 550;
+const int PROJECTION_WIDTH =  500;
+const int PROJECTION_HEIGHT = 512;
 int PW2;
 int PH2;
 int rays;
@@ -160,12 +162,23 @@ void drawPlayer(){
     glBegin(GL_LINES); glVertex2f(p.x,p.y); glVertex2f(p.x + p.dx * 20,p.y + p.dy * 20); glEnd();
 }
 
+void drawTextureMap(){
+    for(int v = 0; v < TEXTURE; v++){
+        for(int u = 0; u < TEXTURE; u++){
+            float c = mapCheckerTexture[v * CELLSIZE +  u];
+            glColor3f(c,c,c); glPointSize(PIXELSCALE);
+            glBegin(GL_POINTS); glVertex2i(u*PIXELSCALE,v*PIXELSCALE); glEnd();
+        }
+    }
+}
+
 void drawRays3D(){
     float rx = 0.0f,ry = 0.0f,xo = 0.0f,yo= 0.0f,ra = 0.0f;
-    int mx = 0, my = 0, dof = 0, r = 0; float dist = 0.0f;
+    int mx = 0, my = 0, dof = 0, r = 0, mapVal = 0; float dist = 0.0f;
     ra = radiansAdjust(p.a - FOV/2);
-    for(r = 0; r < rays; r++){
+    for(r = 0; r <= rays; r++){
         dof = 0;
+        int hm = 0, vm = 0;
         //Horizontal lines 
         float hrx = p.x, hry = p.y;
         float distH = 10000.0f;
@@ -175,7 +188,7 @@ void drawRays3D(){
             while(dof < 8){
                 mx = (int)(hrx/CELLSIZE); my = (int)(hry/CELLSIZE); // get grid position o
                 if(mx >= 0 && mx < mapWidth && my >= 0 && my < mapHeight){
-                    if(walls[my][mx] > 0){ dof = 8; distH = distance(p.x,hrx,p.y,hry);}
+                    if(walls[my][mx] > 0){ dof = 8; distH = distance(p.x,hrx,p.y,hry); hm = walls[my][mx]-1;}
                     else{ hrx += xo; hry += yo; dof+=1; }
                 }
                 else { hrx += xo; hry += yo; dof+=1;}
@@ -194,35 +207,56 @@ void drawRays3D(){
         while(dof < 8){
                 mx = (int)(vrx/CELLSIZE); my = (int)(vry/CELLSIZE); // get grid position o
                 if(mx >= 0 && mx < mapWidth && my >= 0 && my < mapHeight){
-                    if(walls[my][mx] > 0){ dof = 8; distV = distance(p.x,vrx,p.y,vry); }
+                    if(walls[my][mx] > 0){ dof = 8; distV = distance(p.x,vrx,p.y,vry); vm = walls[my][mx]-1; }
                     else { vrx += xo; vry += yo; dof+=1;}
                 }
                 else { vrx += xo; vry += yo; dof+=1;}
         }
         float shade = 1.0f;
         //save the ray with the shortest distance
-        if(distV < distH){dist=distV; rx = vrx; ry = vry; shade = 1.0f;}
-        else{dist=distH; rx = hrx; ry = hry; shade = 0.5f;}
+        if(distV < distH){dist=distV; rx = vrx; ry = vry; shade = 1.0f; mapVal = vm;}
+        else{dist=distH; rx = hrx; ry = hry; shade = 0.5f; mapVal = hm;}
         glLineWidth(2); glColor3f(1.0f,0.0f,0.0f);
         glBegin(GL_LINES); glVertex2i(p.x,p.y); glVertex2i(rx,ry); glEnd();
 
         //Start drawing the walls
-        float correctedDist = dist * cos(radiansAdjust(ra - p.a));
+        float correctedDist = dist * cos(radiansAdjust(p.a - ra));
 
         int projectedSliceHeight = (CELLSIZE/correctedDist) * distFromProjectionPlane;
         float ty = 0, tyStep = TEXTURE/(float)projectedSliceHeight,tyOffset = 0.0f;
         if(projectedSliceHeight > PROJECTION_HEIGHT){ tyOffset = (projectedSliceHeight-PROJECTION_HEIGHT)/2.0;projectedSliceHeight = PROJECTION_HEIGHT;}
         int lineOffset = PH2 - (projectedSliceHeight/2);
-        ty = tyOffset * tyStep;
+        int lineOffsetEnd = PH2 + (projectedSliceHeight/2);
+        ty = (tyOffset * tyStep) + mapVal*TEXTURE;
         float tx = 0;
         if(dist == distH) { tx = (int)(rx/2)%TEXTURE; if(ra < M_PI){tx = NTEX - tx;}}
         if(dist == distV) { tx = (int)(ry/2)%TEXTURE; if(ra > PI2 && ra < PI3){tx = NTEX - tx;}}
         for(int y = 0; y < projectedSliceHeight; y++){ 
+            float rgb[3] = {1.0};
             float c = 1.0f * shade;
-            if(tx >= 0 && tx < TEXTURE && ty >=0 && ty < TEXTURE) {c = mapCheckerTexture[(int)ty * TEXTURE + (int)(tx)] * shade;}
-            glColor3f(c,c,c); glPointSize(PIXELSCALE);
-            glBegin(GL_POINTS); glVertex2i(550+r*PIXELSCALE,y + lineOffset); glEnd();
+            if(tx >= 0 && ty >=0 ) {
+                int pixel = ((int)ty * TEXTURE + (int)tx) * 3 + (mapVal*TEXTURE*TEXTURE*3);
+                rgb[0] = wallTextures[pixel+0] * shade;
+                rgb[1] = wallTextures[pixel+1] * shade;
+                rgb[2] = wallTextures[pixel+2] * shade;
+            }
+            glColor3ub(rgb[0],rgb[1],rgb[2]); glPointSize(PIXELSCALE);
+            glBegin(GL_POINTS); glVertex2i(520+r*PIXELSCALE,y + lineOffset); glEnd();
             ty+=tyStep;
+        }
+        //draw floors
+        for(int y = lineOffset + projectedSliceHeight; y < PROJECTION_HEIGHT; y++){
+            float straightDistToP = (TEXTURE * distFromProjectionPlane)/((y)-PH2); //sttraight distance from player to floor point
+            float beta = ra - p.a; beta = radiansAdjust(beta);
+            float actualDistanceToFloor = straightDistToP / cos(beta); //actual distance from player to floor point
+            float floorX = p.x + cos(ra) * actualDistanceToFloor;
+            float floorY = p.y + sin(ra) * actualDistanceToFloor;
+            int iFloorX = (int)(floorX/CELLSIZE); int iFloorY = (int)(floorY/CELLSIZE);
+            //get tex coords
+            int floorTx = (int)(floorX * TEXTURE  / (CELLSIZE))%TEXTURE; int floorTy = (int)(floorY * TEXTURE / (CELLSIZE*2))%TEXTURE;
+            float c = (mapCheckerTexture[floorTy * CELLSIZE + floorTx]);
+            glColor3f(c,c,c); glPointSize(PIXELSCALE);
+            glBegin(GL_POINTS); glVertex2i(520+r*PIXELSCALE,y); glEnd();
         }
         ra += rayStep; ra = radiansAdjust(ra);
     }
