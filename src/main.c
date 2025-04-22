@@ -5,6 +5,8 @@
 #include "game.h"
 #include "Textures/MapChecker.h"
 #include "Textures/walls.h"
+#include "Textures/floors.h"
+#include "Textures/ceiling.ppm"
 #include "glad/glad.h"
 #include <GLFW/glfw3.h>
 
@@ -244,6 +246,7 @@ void drawRays3D(){
             glBegin(GL_POINTS); glVertex2i(520+r*PIXELSCALE,y + lineOffset); glEnd();
             ty+=tyStep;
         }
+        int i = 0, topY = PH2 - (projectedSliceHeight/2);
         //draw floors
         for(int y = lineOffset + projectedSliceHeight; y < PROJECTION_HEIGHT; y++){
             float straightDistToP = (TEXTURE * distFromProjectionPlane)/((y)-PH2); //sttraight distance from player to floor point
@@ -253,10 +256,26 @@ void drawRays3D(){
             float floorY = p.y + sin(ra) * actualDistanceToFloor;
             int iFloorX = (int)(floorX/CELLSIZE); int iFloorY = (int)(floorY/CELLSIZE);
             //get tex coords
-            int floorTx = (int)(floorX * TEXTURE  / (CELLSIZE))%TEXTURE; int floorTy = (int)(floorY * TEXTURE / (CELLSIZE*2))%TEXTURE;
-            float c = (mapCheckerTexture[floorTy * CELLSIZE + floorTx]);
-            glColor3f(c,c,c); glPointSize(PIXELSCALE);
-            glBegin(GL_POINTS); glVertex2i(520+r*PIXELSCALE,y); glEnd();
+            if(iFloorX >= 0 && iFloorY >= 0 && iFloorX < mapWidth && iFloorY < mapHeight && walls[iFloorY][iFloorX]==0){
+                int rgb[3] = {0};
+                mapVal = floors[iFloorY][iFloorX];
+                int floorTx = (int)(floorX * TEXTURE  / (CELLSIZE))%TEXTURE; int floorTy = (int)(floorY * TEXTURE / (CELLSIZE))%TEXTURE;
+                int pixel = ((int)floorTy * TEXTURE + (int)floorTx) * 3 + (mapVal*TEXTURE*TEXTURE*3);
+                rgb[0] = texturedFloors[pixel+0] * 0.7f;
+                rgb[1] = texturedFloors[pixel+1] * 0.7f;
+                rgb[2] = texturedFloors[pixel+2] * 0.7f;
+                glColor3ub(rgb[0],rgb[1],rgb[2]); glPointSize(PIXELSCALE);
+                glBegin(GL_POINTS); glVertex2i(520+r*PIXELSCALE,y); glEnd();
+                //Draw ceiling
+                mapVal = ceiling[iFloorY][iFloorX]-1;
+                pixel = ((int)floorTy * TEXTURE + (int)floorTx) * 3 + (mapVal*TEXTURE*TEXTURE*3);
+                rgb[0] = texturedCeiling[pixel+0] * 0.7f;
+                rgb[1] = texturedCeiling[pixel+1] * 0.7f;
+                rgb[2] = texturedCeiling[pixel+2] * 0.7f;
+                glColor3ub(rgb[0],rgb[1],rgb[2]); glPointSize(PIXELSCALE);
+                glBegin(GL_POINTS); glVertex2i(520+r*PIXELSCALE,topY - i); glEnd();
+                i++;
+            }
         }
         ra += rayStep; ra = radiansAdjust(ra);
     }
