@@ -28,13 +28,16 @@ void drawSprite(Sprite* s);
 void drawSpriteOnMap(Sprite* s);
 
 
+void playerUpdate();
+void playerInput();
+void rotateView();
 void movePlayer();
-bool wallCollision();
 
 Keys key = {0,0,0,0};
 Player p;
-float pSpeed = 5.0f, rotSpeed = 4.0f;
+float pSpeed = 2.5f, rotSpeed = 3.0f;
 Sprite sprites[5]; int nSprites = 5;
+float angleTarget = 0.0f;
 float planeX, planeY;
 
 GLFWwindow* window;
@@ -52,6 +55,7 @@ float FOV = 60.0f * (M_PI/180.0f);
 float distFromProjectionPlane;
 float rayStep;
 float zDepth[MAX];
+float aspectRatio;
 
 
 //detaTime
@@ -77,25 +81,26 @@ bool init(){
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
     //Start window
-    //glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     
     GLFWmonitor* monitor = glfwGetPrimaryMonitor();
     const GLFWvidmode* mode = glfwGetVideoMode(monitor);
 
-    //SCREEN_WIDTH = mode->width;
-    //SCREEN_HEIGHT = mode->height;
+    SCREEN_WIDTH = mode->width;
+    SCREEN_HEIGHT = mode->height;
 
     //Start projection attributes
     PROJECTION_WIDTH =  SCREEN_WIDTH;
     PROJECTION_HEIGHT = SCREEN_HEIGHT;
     PW2 = PROJECTION_WIDTH/2;
     PH2 = PROJECTION_HEIGHT/2;
+    aspectRatio = PROJECTION_WIDTH/PROJECTION_HEIGHT;
     rayStep = (FOV/PROJECTION_WIDTH) * PIXELSCALE;
     distFromProjectionPlane = (PROJECTION_WIDTH/2)/tan((FOV/2));
     rays = PROJECTION_WIDTH/PIXELSCALE;
 
 
-    window = glfwCreateWindow(SCREEN_WIDTH,SCREEN_HEIGHT,"RAYCASTER",NULL,NULL);
+    window = glfwCreateWindow(SCREEN_WIDTH,SCREEN_HEIGHT,"RAYCASTER",monitor,NULL);
     if(!window){
         printf("ERROR::FAILED TO START GLFW::\n");
         glfwTerminate();
@@ -133,14 +138,14 @@ void end(){
 }
 
 void initScene(){
-    p.x =4.5*CELLSIZE; p.y = 4.5*CELLSIZE; p.a = 3*M_PI/2; p.dx = cos(p.a); p.dy = sin(p.a);
+    p.x =4.5*CELLSIZE; p.y = 4.5*CELLSIZE; p.a = 3*M_PI/2; p.dx = cos(p.a); p.dy = sin(p.a); p.state = IDLE;
     planeX = 0; planeY =  0.6;
     //Enemies
-    sprites[0].x = 1.5*CELLSIZE; sprites[0].y = 1.5*CELLSIZE; sprites[0].tex = muffin; sprites[0].state = 1; sprites[0].width = 32; sprites[0].height = 32;
-    sprites[1].x = 4.5*CELLSIZE; sprites[1].y = 3.5*CELLSIZE; sprites[1].tex = muffin;sprites[1].state = 1; sprites[1].width = 32; sprites[1].height = 32;
-    sprites[2].x = 2.5*CELLSIZE; sprites[2].y = 4.5*CELLSIZE; sprites[2].tex = muffin;sprites[2].state = 1; sprites[2].width = 32; sprites[2].height = 32;
-    sprites[3].x = 3.5*CELLSIZE; sprites[3].y = 3.5*CELLSIZE; sprites[3].tex = muffin;sprites[3].state = 1; sprites[3].width = 32; sprites[3].height = 32;
-    sprites[4].x = 1.5*CELLSIZE; sprites[4].y = 6.5*CELLSIZE; sprites[4].tex = muffin;sprites[4].state = 1; sprites[4].width = 32; sprites[4].height = 32;
+    sprites[0].x = 1.5*CELLSIZE; sprites[0].y = 1.5*CELLSIZE; sprites[0].tex = muffin; sprites[0].visible = 1; sprites[0].width = 32; sprites[0].height = 32;
+    sprites[1].x = 4.5*CELLSIZE; sprites[1].y = 3.5*CELLSIZE; sprites[1].tex = muffin;sprites[1].visible = 1; sprites[1].width = 32; sprites[1].height = 32;
+    sprites[2].x = 2.5*CELLSIZE; sprites[2].y = 4.5*CELLSIZE; sprites[2].tex = muffin;sprites[2].visible = 1; sprites[2].width = 32; sprites[2].height = 32;
+    sprites[3].x = 3.5*CELLSIZE; sprites[3].y = 3.5*CELLSIZE; sprites[3].tex = muffin;sprites[3].visible = 1; sprites[3].width = 32; sprites[3].height = 32;
+    sprites[4].x = 1.5*CELLSIZE; sprites[4].y = 6.5*CELLSIZE; sprites[4].tex = muffin;sprites[4].visible = 1; sprites[4].width = 32; sprites[4].height = 32;
 }
 
 void Update(){
@@ -150,7 +155,7 @@ void Update(){
 	deltaTime = currentTime - lastTime;
 	lastTime = currentTime;
         ProcessInput();
-        movePlayer();
+        playerUpdate();
         //Draw on Screen
         display();
     }
@@ -329,29 +334,71 @@ void frameBufferSizeCallback(GLFWwindow* window,int w,int h){
     glLoadIdentity();
 
 }
+//Player logic functions
 
-void movePlayer(){
-    int ipx = p.x/CELLSIZE, ipy = p.y/CELLSIZE;
-    int xo = 0; if(p.dx < 0){xo=  -20;}else{xo = 20;}
-    int yo = 0; if(p.dy < 0){yo=  -20;}else{yo = 20;}
-    int addXo = (p.x+xo)/CELLSIZE; int subXo = (p.x-xo)/CELLSIZE;
-    int addYo = (p.y+yo)/CELLSIZE; int subYo = (p.y-yo)/CELLSIZE;
-    if(key.up == 1){
-        if(walls[ipy][addXo]==0){p.x += p.dx * pSpeed;} 
-        if(walls[addYo][ipx]==0){p.y += p.dy * pSpeed;} 
+void playerUpdate(){
+    if(p.state == IDLE){
+        playerInput(); //Detect player input 
     }
-    if(key.down == 1){ 
-         if(walls[ipy][subXo]==0){ p.x -= p.dx * pSpeed; }
-         if(walls[subYo][ipx]==0){ p.y -= p.dy * pSpeed; }
+    else if(p.state == MOVING){
+        movePlayer();
     }
+    else if(p.state == ROTATING){
+        rotateView();
+    }
+}
+void playerInput(){
     if(key.left == 1){ 
-        p.a -= rotSpeed * deltaTime; p.a=radiansAdjust(p.a); 
-        p.dx=cos(p.a); p.dy=sin(p.a);
+        p.t = 0.0f;
+        p.state = ROTATING;
+        angleTarget= p.a - 90.0f*M_PI/180.0f; //rotate 90 degrees to left
     }
     if(key.right == 1){ 
-        p.a += rotSpeed * deltaTime; p.a=radiansAdjust(p.a); 
-        p.dx=cos(p.a); p.dy=sin(p.a);
+        p.t=0.0f;
+        p.state = ROTATING;
+        angleTarget = p.a + (90.0f*M_PI/180.0f); //rotate 90 degrees to right
     }
+    int ipx = p.x/CELLSIZE, ipy = p.y/CELLSIZE;
+    if(key.up == 1){
+        float angle =p.a*(180.0f/M_PI);
+        int dir[2] = {0,0};
+        if((int)angle == 0) { dir[0] = 1;}
+        else if((int)angle == 180) { dir[0] = -1;}
+        else if((int)angle == 270) { dir[1] = -1;}
+        else if((int)angle == 90) { dir[1] = 1;}
+        if(walls[ipy + dir[1]][ipx+dir[0]] == 0){
+            p.t = 0.0f;
+            p.state = MOVING;
+            p.wPos[0] = ((ipx + dir[0])*CELLSIZE) + (CELLSIZE/2); p.wPos[1] = ((ipy + dir[1])*CELLSIZE) + (CELLSIZE/2);
+        }
+    }
+    if(key.down == 1){ 
+        float angle =p.a*(180.0f/M_PI);
+        int dir[2] = {0,0};
+        if((int)angle == 0) { dir[0] = -1;}
+        else if((int)angle == 180) { dir[0] = 1;}
+        else if((int)angle == 270) { dir[1] = 1;}
+        else if((int)angle == 90) { dir[1] = -1;}
+        if(walls[ipy + dir[1]][ipx+dir[0]] == 0){
+            p.t = 0.0f;
+            p.state = MOVING;
+            p.wPos[0] = ((ipx + dir[0])*CELLSIZE) + (CELLSIZE/2); p.wPos[1] = ((ipy + dir[1])*CELLSIZE) + (CELLSIZE/2);
+        }
+    }
+}
+
+void rotateView(){
+    p.a = p.a + (p.t * (angleTarget - p.a));
+    p.dx=cos(p.a); p.dy=sin(p.a);
+    p.t += 1.0f * deltaTime * rotSpeed;
+    if(p.t>=1.0f){ p.t = 0.0f; p.state = IDLE;p.a = angleTarget; p.dx=cos(p.a); p.dy=sin(p.a);p.a = radiansAdjust(p.a);}
+}
+
+void movePlayer(){
+        p.x = p.x + (p.t * (p.wPos[0] - p.x));
+        p.y = p.y + (p.t * (p.wPos[1] - p.y));
+        p.t += 1.0f * deltaTime * pSpeed;
+        if(p.t>=1.0f){ p.t = 0.0f; p.state = IDLE;p.x = p.wPos[0]; p.y = p.wPos[1];}
 }
 
 ///Sprite drawing functions
@@ -359,8 +406,9 @@ void drawAllSprites(Sprite sprites[],int n){
     quickSort(sprites,&p,0,nSprites-1);
    //sort all sprites from mayor distance to less distance from player
    for(int i = 0; i < n; i++){
-       if(sprites[i].state == 1){//Draw if the sprite is on
+       if(sprites[i].visible == 1){//Draw if the sprite is on
                 drawSprite(&sprites[i]);
+                drawSpriteOnMap(&sprites[i]);
        }
    }
 }
@@ -374,7 +422,7 @@ void drawSprite(Sprite* s){
     float transformY = invDet * (-planeY * spriteX + planeX * spriteY); //this is actually the depth inside the screen, that what Z is in 3D
     int spriteScreenX = (int)((PW2) * (1 + transformX / transformY));
     int x,y, sx = 0;
-    int scalingFactor =  s->width * s->height;
+    int scalingFactor =  (s->width * s->height);
     int scaleX = (s->width*scalingFactor/ transformY);
     int spriteHeight = (s->height*scalingFactor/ transformY);
     int leftX = (spriteScreenX-scaleX/2), rightX = (spriteScreenX+scaleX/2);

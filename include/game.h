@@ -25,14 +25,21 @@
 #define NTEX TEXTURE-1
 #define MAX 1000
 
+enum PlayerStates{
+	MOVING,IDLE,ROTATING
+};
 typedef struct{
 	int left,right,up,down;
 }Keys;
 
 typedef struct{
-	float x,y;//position
+	float x,y;//world position
 	float dx,dy; //direction
 	float a; //angle
+	VECTOR2I nextPos;
+	float wPos[2];
+	float t;
+	enum PlayerStates state;
 }Player;
 
 typedef struct{
@@ -40,11 +47,10 @@ typedef struct{
 	int height;//Sprite height per tile
 	int* tex;
 	int mapVal;
-	int state; //on-off/ 1-0
-	int x,y,z;
+	int visible; //on-off/ 1-0
+	float x,y,z; //World position
 	float dist;
 }Sprite;
-
 
 
 int walls[mapHeight][mapWidth]={
@@ -112,8 +118,6 @@ void BFS(VECTOR2I* start,VECTOR2I* end){
 			if(neighbor.x < 0 || neighbor.x >= mapWidth || neighbor.y < 0 || neighbor.y >= mapHeight){continue;}
 			if(walls[neighbor.y][neighbor.x] > 0 || visited[neighbor.y][neighbor.x] == true){ continue; }
 			enqueue(&q,&neighbor); visited[neighbor.y][neighbor.x] = true; cameFrom[neighbor.y][neighbor.x] = current;
-			//glColor3f(0.0f,0.0f,1.0f); glPointSize(3);
-			//glBegin(GL_POINTS); glVertex3i((neighbor.x*CELLSIZE+CELLSIZE/2)/4,(neighbor.y*CELLSIZE+CELLSIZE/2)/4,2); glEnd();
 		}
 	}
 	VECTOR2I actual = *end; VECTOR2I next;
