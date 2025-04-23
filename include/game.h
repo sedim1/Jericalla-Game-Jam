@@ -36,11 +36,16 @@ typedef struct{
 }Player;
 
 typedef struct{
-	int width;
-	int height;
+	int width; //Sprite width per tile
+	int height;//Sprite height per tile
 	int* tex;
+	int mapVal;
+	int state; //on-off/ 1-0
 	int x,y,z;
+	float dist;
 }Sprite;
+
+
 
 int walls[mapHeight][mapWidth]={
 	{1,1,2,2,3,1,1,1,1,1,1,1,1,1,1,1},
@@ -121,6 +126,8 @@ void BFS(VECTOR2I* start,VECTOR2I* end){
 			actual = next;
 	}
 };
+
+//Sorting the sprite
 
 
 #endif

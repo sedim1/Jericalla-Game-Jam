@@ -5,6 +5,7 @@
 #include "glad/glad.h"
 #include <GLFW/glfw3.h>
 #include "game.h"
+#include "Quicksort.h"
 
 //Main functions
 bool init();
@@ -13,12 +14,16 @@ void Update();
 void display();
 void frameBufferSizeCallback(GLFWwindow* window,int w,int h);
 void ProcessInput();
+
+void initScene();
+
 //Drawing functions
 void drawMap2D();
 void drawPlayer();
 void drawRays3D();
 void drawTextureMap();
 
+void drawAllSprites(Sprite sprites[],int n);
 void drawSprite(Sprite* s);
 void drawSpriteOnMap(Sprite* s);
 
@@ -29,7 +34,7 @@ bool wallCollision();
 Keys key = {0,0,0,0};
 Player p;
 float pSpeed = 5.0f, rotSpeed = 4.0f;
-Sprite obj,obj2;
+Sprite sprites[5]; int nSprites = 5;
 float planeX, planeY;
 
 GLFWwindow* window;
@@ -59,6 +64,7 @@ float lastTime = 0.0f;
 int main(){
     if(!init())
         return -1;
+    initScene();
     Update();
     end();
     return 0;
@@ -76,8 +82,8 @@ bool init(){
     GLFWmonitor* monitor = glfwGetPrimaryMonitor();
     const GLFWvidmode* mode = glfwGetVideoMode(monitor);
 
-    SCREEN_WIDTH = mode->width;
-    SCREEN_HEIGHT = mode->height;
+    //SCREEN_WIDTH = mode->width;
+    //SCREEN_HEIGHT = mode->height;
 
     //Start projection attributes
     PROJECTION_WIDTH =  SCREEN_WIDTH;
@@ -89,7 +95,7 @@ bool init(){
     rays = PROJECTION_WIDTH/PIXELSCALE;
 
 
-    window = glfwCreateWindow(SCREEN_WIDTH,SCREEN_HEIGHT,"RAYCASTER",monitor,NULL);
+    window = glfwCreateWindow(SCREEN_WIDTH,SCREEN_HEIGHT,"RAYCASTER",NULL,NULL);
     if(!window){
         printf("ERROR::FAILED TO START GLFW::\n");
         glfwTerminate();
@@ -118,17 +124,23 @@ bool init(){
     //Set Callbacks
     glfwSetFramebufferSizeCallback(window, frameBufferSizeCallback); 
 
-    p.x =4.5*CELLSIZE; p.y = 4.5*CELLSIZE; p.a = 3*M_PI/2; p.dx = cos(p.a); p.dy = sin(p.a);
-    planeX = 0; planeY =  0.6;
-    obj.x = 1.5*CELLSIZE; obj.y = 2.5 * CELLSIZE; obj.z = 20; obj.tex = muffin; obj.width = 32; obj.height = 32;
-    obj2 = obj;
-    obj2.x = 4.5*CELLSIZE; obj2.y = 3.5*CELLSIZE; obj.z = 40;
     return true;
 }
 
 void end(){
     glfwDestroyWindow(window);
     glfwTerminate();
+}
+
+void initScene(){
+    p.x =4.5*CELLSIZE; p.y = 4.5*CELLSIZE; p.a = 3*M_PI/2; p.dx = cos(p.a); p.dy = sin(p.a);
+    planeX = 0; planeY =  0.6;
+    //Enemies
+    sprites[0].x = 1.5*CELLSIZE; sprites[0].y = 1.5*CELLSIZE; sprites[0].tex = muffin; sprites[0].state = 1; sprites[0].width = 32; sprites[0].height = 32;
+    sprites[1].x = 4.5*CELLSIZE; sprites[1].y = 3.5*CELLSIZE; sprites[1].tex = muffin;sprites[1].state = 1; sprites[1].width = 32; sprites[1].height = 32;
+    sprites[2].x = 2.5*CELLSIZE; sprites[2].y = 4.5*CELLSIZE; sprites[2].tex = muffin;sprites[2].state = 1; sprites[2].width = 32; sprites[2].height = 32;
+    sprites[3].x = 3.5*CELLSIZE; sprites[3].y = 3.5*CELLSIZE; sprites[3].tex = muffin;sprites[3].state = 1; sprites[3].width = 32; sprites[3].height = 32;
+    sprites[4].x = 1.5*CELLSIZE; sprites[4].y = 6.5*CELLSIZE; sprites[4].tex = muffin;sprites[4].state = 1; sprites[4].width = 32; sprites[4].height = 32;
 }
 
 void Update(){
@@ -148,11 +160,8 @@ void display(){
     glClearColor(0.0f,0.0f,0.0f,1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     drawPlayer();
-    drawSprite(&obj);
-    drawSprite(&obj2);
-    drawSpriteOnMap(&obj);
-    drawSpriteOnMap(&obj2);
     drawMap2D();
+    drawAllSprites(sprites,nSprites);
     drawRays3D();
     glfwPollEvents();
     glfwSwapBuffers(window);
@@ -346,6 +355,15 @@ void movePlayer(){
 }
 
 ///Sprite drawing functions
+void drawAllSprites(Sprite sprites[],int n){
+    quickSort(sprites,&p,0,nSprites-1);
+   //sort all sprites from mayor distance to less distance from player
+   for(int i = 0; i < n; i++){
+       if(sprites[i].state == 1){//Draw if the sprite is on
+                drawSprite(&sprites[i]);
+       }
+   }
+}
 void drawSprite(Sprite* s){
     float spriteX = s->x - p.x;
     float spriteY = s->y - p.y;
@@ -361,30 +379,8 @@ void drawSprite(Sprite* s){
     int spriteHeight = (s->height*scalingFactor/ transformY);
     int leftX = (spriteScreenX-scaleX/2), rightX = (spriteScreenX+scaleX/2);
     int topY   = (PH2 - spriteHeight / 2); int botY   = PH2 + spriteHeight / 2;
-
     float tx=0, ty=0, txStep = s->width/(float)(rightX-leftX), tyStep = s->height/(float)(botY-topY);
     if(transformY <= 45.5){return;}
-    /*
-    for(x = leftX; x < rightX; x++){
-        ty = 0;
-        int sx = x;
-        for(y = topY; y < botY; y++){
-                if(sx>= 0 && sx <= PROJECTION_WIDTH && y < PROJECTION_HEIGHT){
-                    int sy = topY;
-                    float rgb[3] = {1.0};
-                    int pixel = ((int)ty * s->width + (int)(tx)) * 3;
-                    rgb[0] = s->tex[pixel+0]; rgb[1] = s->tex[pixel+1]; rgb[2] = s->tex[pixel+2]; ty+=tyStep; 
-                    if(transformY > zDepth[sx/PIXELSCALE]){continue;}
-                    if(rgb[0] == 255 && rgb[1] == 0 && rgb[2] == 255){continue;}
-                    glColor3ub(rgb[0],rgb[1],rgb[2]); 
-                    glPointSize(1);
-                    glBegin(GL_POINTS); glVertex3i(x,y,1) ;glEnd();
-                }
-                
-        }
-        tx+=txStep;
-    }*/
-
     for(x = leftX; x < rightX; x+=PIXELSCALE){
         ty = 0;
         int sx = x;
@@ -393,7 +389,8 @@ void drawSprite(Sprite* s){
                     int sy = topY;
                     float rgb[3] = {1.0};
                     int pixel = ((int)ty * s->width + (int)(tx)) * 3;
-                    rgb[0] = s->tex[pixel+0]; rgb[1] = s->tex[pixel+1]; rgb[2] = s->tex[pixel+2]; ty+=tyStep; 
+                    rgb[0] = s->tex[pixel+0]; rgb[1] = s->tex[pixel+1]; rgb[2] = s->tex[pixel+2]; 
+                    ty+=tyStep; 
                     if(transformY > zDepth[sx/PIXELSCALE]){continue;}
                     if(rgb[0] == 255 && rgb[1] == 0 && rgb[2] == 255){continue;}
                     glColor3ub(rgb[0],rgb[1],rgb[2]); 
