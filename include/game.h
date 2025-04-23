@@ -1,6 +1,7 @@
 #ifndef GAME_H
 #define GAME_H
 
+#include "glad/glad.h"
 #include <math.h>
 #include "Textures/MapChecker.h"
 #include "Textures/walls.ppm"
@@ -84,6 +85,5 @@ float distance(float x1, float x2, float y1, float y2){
 	float deltaX = x2-x1; float deltaY = y2-y1;
 	return sqrt( (deltaX * deltaX) + (deltaY * deltaY) );
 }
-
 
 #endif
