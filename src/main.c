@@ -24,10 +24,11 @@ void drawSpriteOnMap(Sprite* s);
 
 
 void movePlayer();
+bool wallCollision();
 
 Keys key = {0,0,0,0};
 Player p;
-float pSpeed = 5.0f, rotSpeed = 1.0f;
+float pSpeed = 5.0f, rotSpeed = 4.0f;
 Sprite obj,obj2;
 float planeX, planeY;
 
@@ -46,7 +47,7 @@ float FOV = 60.0f * (M_PI/180.0f);
 float distFromProjectionPlane;
 float rayStep;
 float zDepth[MAX];
-int xOffset;
+
 
 //detaTime
 float deltaTime;
@@ -83,7 +84,6 @@ bool init(){
     PROJECTION_HEIGHT = SCREEN_HEIGHT;
     PW2 = PROJECTION_WIDTH/2;
     PH2 = PROJECTION_HEIGHT/2;
-    xOffset = (SCREEN_WIDTH-PROJECTION_WIDTH)/2;
     rayStep = (FOV/PROJECTION_WIDTH) * PIXELSCALE;
     distFromProjectionPlane = (PROJECTION_WIDTH/2)/tan((FOV/2));
     rays = PROJECTION_WIDTH/PIXELSCALE;
@@ -148,9 +148,9 @@ void display(){
     glClearColor(0.0f,0.0f,0.0f,1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     drawPlayer();
-    //drawSprite(&obj);
+    drawSprite(&obj);
     drawSprite(&obj2);
-    //drawSpriteOnMap(&obj);
+    drawSpriteOnMap(&obj);
     drawSpriteOnMap(&obj2);
     drawMap2D();
     drawRays3D();
@@ -193,7 +193,7 @@ void drawRays3D(){
     float rx = 0.0f,ry = 0.0f,xo = 0.0f,yo= 0.0f,ra = 0.0f;
     int mx = 0, my = 0, dof = 0, r = 0, mapVal = 0; float dist = 0.0f;
     ra = radiansAdjust(p.a - FOV/2);
-    for(r = 0; r < rays; r++){
+    for(r = 0; r <= rays; r++){
         dof = 0;
         int hm = 0, vm = 0;
         //Horizontal lines 
@@ -251,7 +251,7 @@ void drawRays3D(){
                 int pixel = ((int)ty * TEXTURE + (int)tx) * 3 + (mapVal*32*32*3);
                 rgb[0] = wallTex[pixel+0] * shade; rgb[1] = wallTex[pixel+1] * shade; rgb[2] = wallTex[pixel+2] * shade;
                 glColor3ub(rgb[0],rgb[1],rgb[2]); glPointSize(PIXELSCALE);
-                glBegin(GL_POINTS); glVertex3i(xOffset + r*PIXELSCALE,y + lineOffset,0); glEnd();
+                glBegin(GL_POINTS); glVertex3i(r*PIXELSCALE,y + lineOffset,0); glEnd();
                 ty+=tyStep;
             }
         }
@@ -274,7 +274,7 @@ void drawRays3D(){
                     rgb[1] = texturedFloors[pixel+1] * 0.7f;
                     rgb[2] = texturedFloors[pixel+2] * 0.7f;
                     glColor3ub(rgb[0],rgb[1],rgb[2]); glPointSize(PIXELSCALE);
-                    glBegin(GL_POINTS); glVertex3i(xOffset + r*PIXELSCALE,y,0); glEnd();
+                    glBegin(GL_POINTS); glVertex3i(r*PIXELSCALE,y,0); glEnd();
                 }
                 //Draw ceiling
                 int cmapVal = ceiling[iFloorY][iFloorX]-1;
@@ -285,7 +285,7 @@ void drawRays3D(){
                     rgb[1] = texturedCeiling[pixel+1] * 0.7f;
                     rgb[2] = texturedCeiling[pixel+2] * 0.7f;
                     glColor3ub(rgb[0],rgb[1],rgb[2]); glPointSize(PIXELSCALE);
-                    glBegin(GL_POINTS); glVertex3i(xOffset + r*PIXELSCALE,topY - i,0); glEnd();
+                    glBegin(GL_POINTS); glVertex3i(r*PIXELSCALE,topY - i,0); glEnd();
                 }
                 i++;
         }
@@ -309,7 +309,6 @@ void frameBufferSizeCallback(GLFWwindow* window,int w,int h){
     SCREEN_HEIGHT = h;
     PROJECTION_HEIGHT = SCREEN_HEIGHT;
     PH2 = PROJECTION_HEIGHT/2;
-    xOffset = (SCREEN_WIDTH-PROJECTION_WIDTH)/2;
     glViewport(0,0,SCREEN_WIDTH,SCREEN_HEIGHT);
     
     glMatrixMode(GL_PROJECTION);
@@ -323,15 +322,26 @@ void frameBufferSizeCallback(GLFWwindow* window,int w,int h){
 }
 
 void movePlayer(){
-    if(key.up == 1){ p.x += p.dx * pSpeed; p.y += p.dy * pSpeed; }
-    if(key.down == 1){ p.x -= p.dx * pSpeed; p.y -= p.dy * pSpeed; }
+    int ipx = p.x/CELLSIZE, ipy = p.y/CELLSIZE;
+    int xo = 0; if(p.dx < 0){xo=  -20;}else{xo = 20;}
+    int yo = 0; if(p.dy < 0){yo=  -20;}else{yo = 20;}
+    int addXo = (p.x+xo)/CELLSIZE; int subXo = (p.x-xo)/CELLSIZE;
+    int addYo = (p.y+yo)/CELLSIZE; int subYo = (p.y-yo)/CELLSIZE;
+    if(key.up == 1){
+        if(walls[ipy][addXo]==0){p.x += p.dx * pSpeed;} 
+        if(walls[addYo][ipx]==0){p.y += p.dy * pSpeed;} 
+    }
+    if(key.down == 1){ 
+         if(walls[ipy][subXo]==0){ p.x -= p.dx * pSpeed; }
+         if(walls[subYo][ipx]==0){ p.y -= p.dy * pSpeed; }
+    }
     if(key.left == 1){ 
         p.a -= rotSpeed * deltaTime; p.a=radiansAdjust(p.a); 
         p.dx=cos(p.a); p.dy=sin(p.a);
     }
     if(key.right == 1){ 
-        p.a += rotSpeed * deltaTime; p.a=radiansAdjust(p.a); p.dx=cos(p.a); p.dy=sin(p.a);
-        float oldPlaneX = planeX;
+        p.a += rotSpeed * deltaTime; p.a=radiansAdjust(p.a); 
+        p.dx=cos(p.a); p.dy=sin(p.a);
     }
 }
 
@@ -346,19 +356,20 @@ void drawSprite(Sprite* s){
     float transformY = invDet * (-planeY * spriteX + planeX * spriteY); //this is actually the depth inside the screen, that what Z is in 3D
     int spriteScreenX = (int)((PW2) * (1 + transformX / transformY));
     int x,y, sx = 0;
-    int scalingFactor = 1054;
+    int scalingFactor =  s->width * s->height;
     int scaleX = (s->width*scalingFactor/ transformY);
     int spriteHeight = (s->height*scalingFactor/ transformY);
     int leftX = (spriteScreenX-scaleX/2), rightX = (spriteScreenX+scaleX/2);
     int topY   = (PH2 - spriteHeight / 2); int botY   = PH2 + spriteHeight / 2;
 
     float tx=0, ty=0, txStep = s->width/(float)(rightX-leftX), tyStep = s->height/(float)(botY-topY);
-    if(transformY <= 35.5){return;}
+    if(transformY <= 45.5){return;}
+    /*
     for(x = leftX; x < rightX; x++){
         ty = 0;
         int sx = x;
         for(y = topY; y < botY; y++){
-                if(sx>= 0 && sx <= PROJECTION_WIDTH && y <= PROJECTION_HEIGHT){
+                if(sx>= 0 && sx <= PROJECTION_WIDTH && y < PROJECTION_HEIGHT){
                     int sy = topY;
                     float rgb[3] = {1.0};
                     int pixel = ((int)ty * s->width + (int)(tx)) * 3;
@@ -367,32 +378,32 @@ void drawSprite(Sprite* s){
                     if(rgb[0] == 255 && rgb[1] == 0 && rgb[2] == 255){continue;}
                     glColor3ub(rgb[0],rgb[1],rgb[2]); 
                     glPointSize(1);
-                    glBegin(GL_POINTS); glVertex3i(x,y+s->z,1) ;glEnd();
+                    glBegin(GL_POINTS); glVertex3i(x,y,1) ;glEnd();
                 }
                 
         }
         tx+=txStep;
-    }
-    /*for(x = 0; x < rightX - leftX; x++){
-        ty = 0;
-        int sx = ((leftX+x*PIXELSCALE));
-        //int sx = (leftX);
-        for(y = 0; y < botY - topY; y++){
-            if( transformY >  0 && topY + y * PIXELSCALE <= PROJECTION_HEIGHT && 
-                    leftX+x*PIXELSCALE >= 0 && leftX+x*PIXELSCALE < PROJECTION_WIDTH && transformY < zDepth[(int)(x)/PIXELSCALE]){
-                int sy = topY+y*PIXELSCALE;
-                float rgb[3] = {1.0};
-                int pixel = ((int)ty * s->width + (int)tx) * 3;
-                rgb[0] = s->tex[pixel+0]; rgb[1] = s->tex[pixel+1]; rgb[2] = s->tex[pixel+2];
-                ty+=tyStep; 
-                //if(rgb[0] == 255 && rgb[1] == 0 && rgb[2] == 255){continue;}
-                glColor3ub(rgb[0],rgb[1],rgb[2]); 
-                glPointSize(PIXELSCALE);
-                //glBegin(GL_POINTS); glVertex3i(xOffset + leftX + x*PIXELSCALE,topY + y * PIXELSCALE,1) ;glEnd();
-                glBegin(GL_POINTS); glVertex3i(sx,sy,1) ;glEnd();
-            }
-        }
-        tx+=txStep;
     }*/
+
+    for(x = leftX; x < rightX; x+=PIXELSCALE){
+        ty = 0;
+        int sx = x;
+        for(y = topY; y < botY; y++){
+                if(sx>= 0 && sx <= PROJECTION_WIDTH && y < PROJECTION_HEIGHT){
+                    int sy = topY;
+                    float rgb[3] = {1.0};
+                    int pixel = ((int)ty * s->width + (int)(tx)) * 3;
+                    rgb[0] = s->tex[pixel+0]; rgb[1] = s->tex[pixel+1]; rgb[2] = s->tex[pixel+2]; ty+=tyStep; 
+                    if(transformY > zDepth[sx/PIXELSCALE]){continue;}
+                    if(rgb[0] == 255 && rgb[1] == 0 && rgb[2] == 255){continue;}
+                    glColor3ub(rgb[0],rgb[1],rgb[2]); 
+                    glPointSize(PIXELSCALE);
+                    glBegin(GL_POINTS); glVertex3i(x,y,1) ;glEnd();
+                }
+                
+        }
+        tx+=txStep*PIXELSCALE;
+    }
+
 }
 
