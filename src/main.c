@@ -2,13 +2,9 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <math.h>
-#include "game.h"
-#include "Textures/MapChecker.h"
-#include "Textures/walls.ppm"
-#include "Textures/floors.h"
-#include "Textures/ceiling.ppm"
 #include "glad/glad.h"
 #include <GLFW/glfw3.h>
+#include "game.h"
 
 //Main functions
 bool init();
@@ -31,8 +27,9 @@ void movePlayer();
 
 Keys key = {0,0,0,0};
 Player p;
-float pSpeed = 5.0f, rotSpeed = 5.0f;
+float pSpeed = 5.0f, rotSpeed = 1.0f;
 Sprite obj;
+float planeX, planeY;
 
 GLFWwindow* window;
 
@@ -48,6 +45,7 @@ int rays;
 float FOV = 60.0f * (M_PI/180.0f);
 float distFromProjectionPlane;
 float rayStep;
+float zDepth[MAX];
 
 //detaTime
 float deltaTime;
@@ -101,7 +99,9 @@ bool init(){
     glfwSetFramebufferSizeCallback(window, frameBufferSizeCallback); 
 
     p.x =300.0f; p.y = 300.0f; p.a = 3*M_PI/2; p.dx = cos(p.a); p.dy = sin(p.a);
-    obj.x = 64+32; obj.y = 64+32; obj.z = 20;
+    planeX = 0; planeY =  0.6;
+    obj.x = 1.5*CELLSIZE; obj.y = 2.5 * CELLSIZE; obj.z = 20; obj.tex = muffin; obj.width = 32; obj.height = 32;
+
 
     //Start Projection Attributes
     rayStep = (FOV/PROJECTION_WIDTH) * PIXELSCALE;
@@ -109,7 +109,6 @@ bool init(){
     PW2 = PROJECTION_WIDTH/2;
     PH2 = PROJECTION_HEIGHT/2;
     rays = PROJECTION_WIDTH/PIXELSCALE;
-    printf("rays to emit %d\n",rays);
 
 
     return true;
@@ -137,6 +136,7 @@ void display(){
     glClearColor(0.0f,0.4f,0.3f,1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     drawPlayer();
+    drawSprite(&obj);
     drawSpriteOnMap(&obj);
     drawMap2D();
     drawRays3D();
@@ -176,33 +176,46 @@ void drawSpriteOnMap(Sprite* p){
 }
 
 
-void drawTextureMap(){
-    for(int v = 0; v < TEXTURE; v++){
-        for(int u = 0; u < TEXTURE; u++){
-            float c = mapCheckerTexture[v * CELLSIZE +  u];
-            glColor3f(c,c,c); glPointSize(PIXELSCALE);
-            glBegin(GL_POINTS); glVertex3i(u*PIXELSCALE,v*PIXELSCALE,2); glEnd();
-        }
-    }
-}
 
 void drawSprite(Sprite* s){
-    float dx = s->x - p.x;
-    float dy = s->y - p.y;
-    float sinA = sinf(-p.a); float cosA = cosf(-p.a);
-    float transformX = dx * cosA - dy * sinA;
-    float transformY = dx * sinA + dy * cosA;
-    float spriteScreenX = (PW2) + (transformX * (PW2 / transformY));
-    glPointSize(PIXELSCALE); glColor3ub(255,255,0);
-    glBegin(GL_POINTS);glVertex3i(spriteScreenX,PH2,2);glEnd();
-    //glBegin(GL_POINTS);glVertex2i(0,0);glEnd();
+    float spriteX = s->x - p.x;
+    float spriteY = s->y - p.y;
+    planeX = -p.dy * 0.6;
+    planeY =  p.dx * 0.6;
+    float invDet = 1.0 / (planeX * p.dy - p.dx * planeY);
+
+    float transformX = (invDet * (p.dy * spriteX - p.dx * spriteY));
+    float transformY = invDet * (-planeY * spriteX + planeX * spriteY); //this is actually the depth inside the screen, that what Z is in 3D
+    int spriteScreenX = (int)((PW2) * (1 + transformX / transformY));
+
+    int x,y, sx = 0;
+    int scaleX = s->width*80.0f/ transformY;
+    int spriteHeight = s->height*80.0f/ transformY;
+    int leftX = (spriteScreenX - scaleX/2), rightX = (spriteScreenX + scaleX/2);
+    int topY   = PH2 - spriteHeight / 2; int botY   = PH2 + spriteHeight / 2;
+    float tx=0, ty=0, txStep = s->width/(float)scaleX, tyStep = s->height/(float)scaleX;
+    for(x = 0; x <= rightX - leftX; x++){
+        ty = 0;
+        for(y = 0; y < botY - topY; y++){
+            if( transformY > 0 && leftX+x*PIXELSCALE >= 0 && leftX+x*PIXELSCALE < PROJECTION_WIDTH && transformY < zDepth[(int)(leftX+x*PIXELSCALE)/PIXELSCALE]){
+                float rgb[3] = {1.0};
+                int pixel = ((int)ty * s->width + (int)tx) * 3;
+                rgb[0] = s->tex[pixel+0]; rgb[1] = s->tex[pixel+1]; rgb[2] = s->tex[pixel+2];
+                ty+=tyStep; 
+                if(rgb[0] == 255 && rgb[1] == 0 && rgb[2] == 255){continue;}
+                glColor3ub(rgb[0],rgb[1],rgb[2]); glPointSize(PIXELSCALE);
+                glBegin(GL_POINTS); glVertex3i(leftX + x*PIXELSCALE,topY + y * PIXELSCALE,1) ;glEnd();
+            }
+        }
+        tx+=txStep;
+    }
 }
 
 void drawRays3D(){
     float rx = 0.0f,ry = 0.0f,xo = 0.0f,yo= 0.0f,ra = 0.0f;
     int mx = 0, my = 0, dof = 0, r = 0, mapVal = 0; float dist = 0.0f;
     ra = radiansAdjust(p.a - FOV/2);
-    for(r = 0; r <= rays; r++){
+    for(r = 0; r < rays; r++){
         dof = 0;
         int hm = 0, vm = 0;
         //Horizontal lines 
@@ -244,6 +257,7 @@ void drawRays3D(){
         else{dist=distH; rx = hrx; ry = hry; shade = 0.5f; mapVal = hm;}
         //Start drawing the walls
         float correctedDist = dist * cos(radiansAdjust(p.a - ra));
+        zDepth[r] = correctedDist;
         int projectedSliceHeight = (CELLSIZE/correctedDist) * distFromProjectionPlane;
         float ty = 0, tyStep = TEXTURE/(float)projectedSliceHeight,tyOffset = 0.0f;
         if(projectedSliceHeight > PROJECTION_HEIGHT){ tyOffset = (projectedSliceHeight-PROJECTION_HEIGHT)/2.0;projectedSliceHeight = PROJECTION_HEIGHT;}
@@ -330,6 +344,12 @@ void frameBufferSizeCallback(GLFWwindow* window,int w,int h){
 void movePlayer(){
     if(key.up == 1){ p.x += p.dx * pSpeed; p.y += p.dy * pSpeed; }
     if(key.down == 1){ p.x -= p.dx * pSpeed; p.y -= p.dy * pSpeed; }
-    if(key.left == 1){ p.a -= rotSpeed * deltaTime; p.a=radiansAdjust(p.a); p.dx=cos(p.a); p.dy=sin(p.a);}
-    if(key.right == 1){ p.a += rotSpeed * deltaTime; p.a=radiansAdjust(p.a); p.dx=cos(p.a); p.dy=sin(p.a);}
+    if(key.left == 1){ 
+        p.a -= rotSpeed * deltaTime; p.a=radiansAdjust(p.a); 
+        p.dx=cos(p.a); p.dy=sin(p.a);
+    }
+    if(key.right == 1){ 
+        p.a += rotSpeed * deltaTime; p.a=radiansAdjust(p.a); p.dx=cos(p.a); p.dy=sin(p.a);
+        float oldPlaneX = planeX;
+    }
 }

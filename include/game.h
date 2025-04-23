@@ -2,7 +2,11 @@
 #define GAME_H
 
 #include <math.h>
-#include "glad/glad.h"
+#include "Textures/MapChecker.h"
+#include "Textures/walls.ppm"
+#include "Textures/floors.h"
+#include "Textures/ceiling.ppm"
+#include "Textures/muffin.ppm"
 
 #define M_PI 3.14159265358979323846 //180 degrees
 #define PI2 M_PI/2.0f // 90 degrees
@@ -17,6 +21,7 @@
 #define PIXELSCALE 8
 #define TEXTURE 32
 #define NTEX TEXTURE-1
+#define MAX 1000
 
 typedef struct{
 	int left,right,up,down;
@@ -29,7 +34,9 @@ typedef struct{
 }Player;
 
 typedef struct{
-	int map;
+	int width;
+	int height;
+	int* tex;
 	int x,y,z;
 }Sprite;
 
