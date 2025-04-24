@@ -23,7 +23,9 @@ void drawPlayer();
 void drawRays3D();
 void drawTextureMap();
 
-void drawAllSprites(Sprite sprites[],int n);
+void drawScreen(int screen[]);//All screens textures size are 1024 x 640
+
+void drawAllSprites(Sprite* sprites[],int n);
 void drawSprite(Sprite* s);
 void drawSpriteOnMap(Sprite* s);
 
@@ -37,15 +39,23 @@ void movePlayer();
 void enemyUpdate();
 void followPlayer();
 
+void updateMuffins();
+
+enum GameState gameState = TITLE;
+float lastScreenTime = 0.0f;
+
 Keys key = {0,0,0,0};
 Player p;
 float pSpeed = 2.5f, rotSpeed = 3.0f;
 
-Sprite sprites[5]; int nSprites = 5;
+Sprite *sprites[9]; int nSprites = 9;
+Sprite enemy, muffins[8];
+bool allCollected = false;
 //Enemy variables
-Sprite* enemy; float te = 0.0f; VECTOR2I enemyNextPosition = {-1,-1}; float ewPos[2] = {-1.0f,};
-float lastWait = 0.0f, cooldown = 1.0f;
-enum EnemyAIStates enemyAiState; enum PlayerStates enemyState = IDLE; //0 IDLE, 1 MOVING
+float te = 0.0f; VECTOR2I enemyNextPosition = {-1,-1}; float ewPos[2] = {-1.0f,};
+float lastWait = 0.0f, cooldown = 1.8f;
+enum EnemyAIStates enemyAiState = STILL; enum PlayerStates enemyState = IDLE; //0 IDLE, 1 MOVING
+
 
 
 float angleTarget = 0.0f;
@@ -138,7 +148,7 @@ bool init(){
     glEnable(GL_DEPTH_TEST);
 
     //Set Callbacks
-    glfwSetFramebufferSizeCallback(window, frameBufferSizeCallback); 
+    glfwSetFramebufferSizeCallback(window, frameBufferSizeCallback);
 
     return true;
 }
@@ -149,15 +159,37 @@ void end(){
 }
 
 void initScene(){
-    p.x =4.5*CELLSIZE; p.y = 4.5*CELLSIZE; p.a = 3*M_PI/2; p.dx = cos(p.a); p.dy = sin(p.a); p.state = IDLE;
+    p.x =2.5*CELLSIZE; p.y = 6.5*CELLSIZE; p.a = 3*M_PI/2; p.dx = cos(p.a); p.dy = sin(p.a); p.state = IDLE;
     planeX = 0; planeY =  0.6;
     //Enemies
-    sprites[0].x = 1.5*CELLSIZE; sprites[0].y = 1.5*CELLSIZE; sprites[0].tex = witch; sprites[0].visible = 1; sprites[0].width = 72; sprites[0].height = 89;
-    sprites[1].x = 2.5*CELLSIZE; sprites[1].y = 1.5*CELLSIZE; sprites[1].tex = muffin; sprites[1].visible = 1; sprites[1].width = 40; sprites[1].height = 40;
-    sprites[2].x = 3.5*CELLSIZE; sprites[2].y = 1.5*CELLSIZE; sprites[2].tex = muffin; sprites[2].visible = 1; sprites[2].width = 40; sprites[2].height = 40;
-    sprites[3].x = 4.5*CELLSIZE; sprites[3].y = 1.5*CELLSIZE; sprites[3].tex = muffin; sprites[3].visible = 1; sprites[3].width = 40; sprites[3].height = 40;
-    sprites[4].x = 5.5*CELLSIZE; sprites[4].y = 1.5*CELLSIZE; sprites[4].tex = muffin; sprites[4].visible = 1; sprites[4].width = 40; sprites[4].height = 40;
-    enemy = &sprites[0]; enemyAiState = STILL; enemyState = IDLE;
+    enemy.x = 30.5*CELLSIZE; enemy.y = 1.5*CELLSIZE; enemy.tex = witch; enemy.visible = 1; enemy.width = 72; enemy.height = 89;
+    enemy.type = ENEMY;enemyAiState = STILL; enemyState = IDLE; sprites[0] = &enemy;
+
+    muffins[0].x = 28.5*CELLSIZE;  muffins[0].y = 20.5*CELLSIZE;  muffins[0].tex = muffin;  
+    muffins[0].visible = 1;  muffins[0].width = 40;  muffins[0].height = 40;  muffins[0].type = OBJECT; sprites[1]= & muffins[0];
+
+    muffins[1].x = 30.5*CELLSIZE;  muffins[1].y = 7.5*CELLSIZE;  muffins[1].tex = muffin; 
+    muffins[1].visible = 1;  muffins[1].width = 40;  muffins[1].height = 40;  muffins[1].type = OBJECT; sprites[2] = & muffins[1];
+
+    muffins[2].x = 23.5*CELLSIZE;  muffins[2].y = 18.5*CELLSIZE;  muffins[2].tex = muffin; 
+    muffins[2].visible = 1;  muffins[2].width = 40;  muffins[2].height = 40; muffins[2].type = OBJECT;  sprites[3] = & muffins[2];
+
+     muffins[3].x = 1.5*CELLSIZE;  muffins[3].y = 23.5*CELLSIZE;  muffins[3].tex = muffin; 
+     muffins[3].visible = 1;  muffins[3].width = 40;  muffins[3].height = 40;  muffins[3].type = OBJECT; sprites[4] = & muffins[3];
+
+     muffins[4].x = 6.5*CELLSIZE;  muffins[4].y = 21.5*CELLSIZE;  muffins[4].tex = muffin; 
+     muffins[4].visible = 1;  muffins[4].width = 40;  muffins[4].height = 40;  muffins[4].type = OBJECT; sprites[5] = & muffins[4];
+
+     muffins[5].x = 20.5*CELLSIZE;  muffins[5].y = 13.5*CELLSIZE;  muffins[5].tex = muffin; 
+     muffins[5].visible = 1;  muffins[5].width = 40;  muffins[5].height = 40;  muffins[5].type = OBJECT; sprites[6] = & muffins[5];
+
+     muffins[6].x = 8.5*CELLSIZE;  muffins[6].y = 10.5*CELLSIZE;  muffins[6].tex = muffin; 
+     muffins[6].visible = 1;  muffins[6].width = 40;  muffins[6].height = 40;  muffins[6].type = OBJECT; sprites[7] = & muffins[6];
+     
+     muffins[7].x = 16.5*CELLSIZE;  muffins[7].y = 19.5*CELLSIZE;  muffins[7].tex = muffin; 
+     muffins[7].visible = 1;  muffins[7].width = 40;  muffins[7].height = 40;  muffins[7].type = OBJECT; sprites[8] = & muffins[7];
+
+     walls[5][2] = 4;
 }
 
 void Update(){
@@ -167,8 +199,30 @@ void Update(){
 	deltaTime = currentTime - lastTime;
 	lastTime = currentTime;
         ProcessInput();
-        playerUpdate();
-        enemyUpdate();
+        if(gameState == TITLE){
+            if(key.enter==1){
+                gameState = LOADING;
+                lastScreenTime = (float)glfwGetTime();
+            }
+        }
+        else if(gameState == LOADING){
+            float currentScreenTime = (float)glfwGetTime();
+            if(currentScreenTime - lastScreenTime > 3.0f){
+                gameState = INGAME;
+                initScene();
+            }
+        }
+        else if(gameState == INGAME){
+            playerUpdate();
+            updateMuffins();
+            enemyUpdate();
+        }
+        else if(gameState == LOST || WIN){
+             float currentScreenTime = (float)glfwGetTime();
+            if(currentScreenTime - lastScreenTime > 5.0f){
+                gameState = TITLE;
+            }
+        }
         //Draw on Screen
         display();
     }
@@ -177,16 +231,71 @@ void Update(){
 void display(){
     glClearColor(0.0f,0.0f,0.0f,1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    drawPlayer();
-    drawMap2D();
-    drawAllSprites(sprites,nSprites);
-    drawRays3D();
+    if(gameState == TITLE){
+        drawScreen(title);
+    }
+    else if(gameState == LOADING){
+        drawScreen(loading);
+    }
+    else if(gameState == INGAME){
+        drawAllSprites(sprites,nSprites);
+        drawRays3D();
+    }
     glfwPollEvents();
     glfwSwapBuffers(window);
 }
 
+void drawScreen(int screen[]){//All screens textures size are 1024 x 640
+    float ty = 0; float tx = 0; 
+    int rgb[3] = {0,0,0};
+    float tyStep = 640.0f / PROJECTION_HEIGHT;
+    float txStep = 1024.0f / PROJECTION_WIDTH;
+    glBegin(GL_POINTS);
+    for(int x = 0; x < PROJECTION_WIDTH;x++){
+        ty = 0;
+        for(int y = 0; y < PROJECTION_HEIGHT;y++){
+            int pixel = ((int)ty * 1024 + (int)(tx)) * 3;
+            rgb[0] = screen[pixel+0]; rgb[1] = screen[pixel+1]; rgb[2] = screen[pixel+2]; 
+            ty+=tyStep; 
+            if(rgb[0] == 255 && rgb[1] == 0 && rgb[2] == 255){continue;}
+            glColor3ub(rgb[0],rgb[1],rgb[2]); 
+            glPointSize(1);
+             glVertex3i(x,y,1);
+        }
+        tx+=txStep;
+    }
+    glEnd();
+}
+
+void updateMuffins(){
+    allCollected = true;
+    VECTOR2I playerPos = {(int)(p.x/CELLSIZE),(int)(p.y/CELLSIZE)};
+    for(int i = 0; i < 8;i++){
+        if(muffins[i].visible == 1){
+            allCollected = false;
+            VECTOR2I spritePos = {(int)(muffins[i].x/CELLSIZE),(int)(muffins[i].y/CELLSIZE)};
+            if(playerPos.x == spritePos.x && playerPos.y == spritePos.y){
+                if(enemyAiState == STILL){
+                    enemy.x = 2.5 * CELLSIZE; enemy.y = 6.5*CELLSIZE;
+                    enemyAiState = FOLLOW_PLAYER;
+                }
+                muffins[i].visible = 0;
+            }
+        }
+    }
+    if(allCollected){walls[5][2] = 0;}
+    if(allCollected && playerPos.x == 2 && playerPos.y == 5){
+        lastScreenTime = (float)glfwGetTime();
+        gameState = WIN;
+    }
+}
+
 //Enemy functions
 void enemyUpdate(){
+    if((int)(p.x/CELLSIZE)==(int)(enemy.x/CELLSIZE) && (int)(p.y/CELLSIZE)==(int)(enemy.y/CELLSIZE) && enemy.type == ENEMY){
+        gameState = LOST;
+        lastScreenTime= (float)glfwGetTime();
+    }
     if(enemyAiState == FOLLOW_PLAYER){//Follow the player
         followPlayer();
     }
@@ -197,7 +306,7 @@ void followPlayer(){
         float currentWait = (float)glfwGetTime();
         if(currentWait-lastWait>=cooldown){
             lastWait = currentWait;
-            VECTOR2I start = {(int)(enemy->x/CELLSIZE),(int)(enemy->y/CELLSIZE)};
+            VECTOR2I start = {(int)(enemy.x/CELLSIZE),(int)(enemy.y/CELLSIZE)};
             VECTOR2I end = {(int)(p.x/CELLSIZE),(int)(p.y/CELLSIZE)};
             //VECTOR2I end = {10,5};
             enemyNextPosition = BFS(&start,&end);
@@ -208,10 +317,10 @@ void followPlayer(){
     }
     else if(enemyState == MOVING){
         float speedFactor = 5.0f;
-        enemy->x = enemy->x + (te * (ewPos[0] - enemy->x));
-        enemy->y = enemy->y + (te * (ewPos[1] - enemy->y));
+        enemy.x = enemy.x + (te * (ewPos[0] - enemy.x));
+        enemy.y = enemy.y + (te * (ewPos[1] - enemy.y));
         te += 1.0f * deltaTime * speedFactor;
-        if(te>=1.0f){ te = 0.0f; enemyState = IDLE;enemy->x = ewPos[0]; enemy->y = ewPos[1];}
+        if(te>=1.0f){ te = 0.0f; enemyState = IDLE;enemy.x = ewPos[0]; enemy.y = ewPos[1];}
     }
 }
 
@@ -369,6 +478,7 @@ void ProcessInput(){
     if(glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS){key.left=1;}else{key.left=0;}
     if(glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS){key.right=1;}else{key.right=0;}
     if(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS){key.shift=1;}else{key.shift=0;}
+    if(glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_PRESS){key.enter=1;}else{key.enter=0;}
 }
 
 void frameBufferSizeCallback(GLFWwindow* window,int w,int h){
@@ -458,13 +568,12 @@ void movePlayer(){
 }
 
 ///Sprite drawing functions
-void drawAllSprites(Sprite sprites[],int n){
+void drawAllSprites(Sprite* sprites[],int n){
     quickSort(sprites,&p,0,nSprites-1);
    //sort all sprites from mayor distance to less distance from player
    for(int i = 0; i < n; i++){
-       if(sprites[i].visible == 1){//Draw if the sprite is on
-                drawSprite(&sprites[i]);
-                drawSpriteOnMap(&sprites[i]);
+       if(sprites[i]->visible == 1){//Draw if the sprite is on
+                drawSprite(sprites[i]);
        }
    }
 }
