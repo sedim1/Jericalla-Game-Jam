@@ -27,16 +27,27 @@ void drawAllSprites(Sprite sprites[],int n);
 void drawSprite(Sprite* s);
 void drawSpriteOnMap(Sprite* s);
 
-
+//Player functions
 void playerUpdate();
 void playerInput();
 void rotateView();
 void movePlayer();
 
+//Enemy functions
+void enemyUpdate();
+void followPlayer();
+
 Keys key = {0,0,0,0};
 Player p;
 float pSpeed = 2.5f, rotSpeed = 3.0f;
+
 Sprite sprites[5]; int nSprites = 5;
+//Enemy variables
+Sprite* enemy; float te = 0.0f; VECTOR2I enemyNextPosition = {-1,-1}; float ewPos[2] = {-1.0f,};
+float lastWait = 0.0f, cooldown = 1.0f;
+enum EnemyAIStates enemyAiState; enum PlayerStates enemyState = IDLE; //0 IDLE, 1 MOVING
+
+
 float angleTarget = 0.0f;
 float planeX, planeY;
 
@@ -141,11 +152,12 @@ void initScene(){
     p.x =4.5*CELLSIZE; p.y = 4.5*CELLSIZE; p.a = 3*M_PI/2; p.dx = cos(p.a); p.dy = sin(p.a); p.state = IDLE;
     planeX = 0; planeY =  0.6;
     //Enemies
-    sprites[0].x = 1.5*CELLSIZE; sprites[0].y = 1.5*CELLSIZE; sprites[0].tex = muffin; sprites[0].visible = 1; sprites[0].width = 32; sprites[0].height = 32;
-    sprites[1].x = 4.5*CELLSIZE; sprites[1].y = 3.5*CELLSIZE; sprites[1].tex = muffin;sprites[1].visible = 1; sprites[1].width = 32; sprites[1].height = 32;
-    sprites[2].x = 2.5*CELLSIZE; sprites[2].y = 4.5*CELLSIZE; sprites[2].tex = muffin;sprites[2].visible = 1; sprites[2].width = 32; sprites[2].height = 32;
-    sprites[3].x = 3.5*CELLSIZE; sprites[3].y = 3.5*CELLSIZE; sprites[3].tex = muffin;sprites[3].visible = 1; sprites[3].width = 32; sprites[3].height = 32;
-    sprites[4].x = 1.5*CELLSIZE; sprites[4].y = 6.5*CELLSIZE; sprites[4].tex = muffin;sprites[4].visible = 1; sprites[4].width = 32; sprites[4].height = 32;
+    sprites[0].x = 1.5*CELLSIZE; sprites[0].y = 1.5*CELLSIZE; sprites[0].tex = witch; sprites[0].visible = 1; sprites[0].width = 72; sprites[0].height = 89;
+    sprites[1].x = 2.5*CELLSIZE; sprites[1].y = 1.5*CELLSIZE; sprites[1].tex = muffin; sprites[1].visible = 1; sprites[1].width = 40; sprites[1].height = 40;
+    sprites[2].x = 3.5*CELLSIZE; sprites[2].y = 1.5*CELLSIZE; sprites[2].tex = muffin; sprites[2].visible = 1; sprites[2].width = 40; sprites[2].height = 40;
+    sprites[3].x = 4.5*CELLSIZE; sprites[3].y = 1.5*CELLSIZE; sprites[3].tex = muffin; sprites[3].visible = 1; sprites[3].width = 40; sprites[3].height = 40;
+    sprites[4].x = 5.5*CELLSIZE; sprites[4].y = 1.5*CELLSIZE; sprites[4].tex = muffin; sprites[4].visible = 1; sprites[4].width = 40; sprites[4].height = 40;
+    enemy = &sprites[0]; enemyAiState = STILL; enemyState = IDLE;
 }
 
 void Update(){
@@ -156,6 +168,7 @@ void Update(){
 	lastTime = currentTime;
         ProcessInput();
         playerUpdate();
+        enemyUpdate();
         //Draw on Screen
         display();
     }
@@ -170,6 +183,36 @@ void display(){
     drawRays3D();
     glfwPollEvents();
     glfwSwapBuffers(window);
+}
+
+//Enemy functions
+void enemyUpdate(){
+    if(enemyAiState == FOLLOW_PLAYER){//Follow the player
+        followPlayer();
+    }
+}
+
+void followPlayer(){
+    if(enemyState == IDLE){
+        float currentWait = (float)glfwGetTime();
+        if(currentWait-lastWait>=cooldown){
+            lastWait = currentWait;
+            VECTOR2I start = {(int)(enemy->x/CELLSIZE),(int)(enemy->y/CELLSIZE)};
+            VECTOR2I end = {(int)(p.x/CELLSIZE),(int)(p.y/CELLSIZE)};
+            //VECTOR2I end = {10,5};
+            enemyNextPosition = BFS(&start,&end);
+            te = 0.0f;
+            ewPos[0] = (enemyNextPosition.x * CELLSIZE) + CELLSIZE/2; ewPos[1] = (enemyNextPosition.y * CELLSIZE) + CELLSIZE/2;
+            enemyState = MOVING;
+        }
+    }
+    else if(enemyState == MOVING){
+        float speedFactor = 5.0f;
+        enemy->x = enemy->x + (te * (ewPos[0] - enemy->x));
+        enemy->y = enemy->y + (te * (ewPos[1] - enemy->y));
+        te += 1.0f * deltaTime * speedFactor;
+        if(te>=1.0f){ te = 0.0f; enemyState = IDLE;enemy->x = ewPos[0]; enemy->y = ewPos[1];}
+    }
 }
 
 //drawing functions
@@ -205,7 +248,7 @@ void drawSpriteOnMap(Sprite* p){
 
 void drawRays3D(){
     float rx = 0.0f,ry = 0.0f,xo = 0.0f,yo= 0.0f,ra = 0.0f;
-    int mx = 0, my = 0, dof = 0, r = 0, mapVal = 0; float dist = 0.0f;
+    int mx = 0, my = 0, dof = 0, r = 0, mapVal = 0; float dist = 0.0f; int maxDof = 200;
     ra = radiansAdjust(p.a - FOV/2);
     for(r = 0; r <= rays; r++){
         dof = 0;
@@ -216,10 +259,10 @@ void drawRays3D(){
         if(ra == 0 || ra == M_PI){ ra+=0.00000001f;}
         if(ra > M_PI ){ hry = ((int)(p.y/CELLSIZE))*CELLSIZE - 0.0001f; hrx = p.x - (p.y - hry)/tan(ra); yo = -CELLSIZE; xo = -CELLSIZE/tan(ra); }//Looking up
         if(ra < M_PI ){ hry = ((int)(p.y/CELLSIZE))*CELLSIZE + CELLSIZE; hrx = p.x - (p.y - hry)/tan(ra); yo = CELLSIZE; xo = CELLSIZE/tan(ra); }//Looking down
-            while(dof < 15){
+            while(dof < maxDof){
                 mx = (int)(hrx/CELLSIZE); my = (int)(hry/CELLSIZE); // get grid position o
                 if(mx >= 0 && mx < mapWidth && my >= 0 && my < mapHeight){
-                    if(walls[my][mx] > 0){ dof = 15; distH = distance(p.x,hrx,p.y,hry); hm = walls[my][mx]-1;}
+                    if(walls[my][mx] > 0){ dof = maxDof; distH = distance(p.x,hrx,p.y,hry); hm = walls[my][mx]-1;}
                     else{ hrx += xo; hry += yo; dof+=1; }
                 }
                 else { hrx += xo; hry += yo; dof+=1;}
@@ -235,10 +278,10 @@ void drawRays3D(){
         if( ra < 3*M_PI/2 && ra > M_PI/2  ){ //left
             vrx = ((int)(p.x/CELLSIZE))*CELLSIZE - 0.0001f; vry = p.y - (p.x-vrx)*tan(ra); xo = -CELLSIZE; yo= -CELLSIZE*tan(ra);
         }
-        while(dof < 15){
+        while(dof < maxDof){
                 mx = (int)(vrx/CELLSIZE); my = (int)(vry/CELLSIZE); // get grid position o
                 if(mx >= 0 && mx < mapWidth && my >= 0 && my < mapHeight){
-                    if(walls[my][mx] > 0){ dof = 15; distV = distance(p.x,vrx,p.y,vry); vm = walls[my][mx]-1; }
+                    if(walls[my][mx] > 0){ dof = maxDof; distV = distance(p.x,vrx,p.y,vry); vm = walls[my][mx]-1; }
                     else { vrx += xo; vry += yo; dof+=1;}
                 }
                 else { vrx += xo; vry += yo; dof+=1;}
@@ -247,6 +290,8 @@ void drawRays3D(){
         //save the ray with the shortest distance
         if(distV < distH){dist=distV; rx = vrx; ry = vry; shade = 1.0f; mapVal = vm;}
         else{dist=distH; rx = hrx; ry = hry; shade = 0.5f; mapVal = hm;}
+        float fog = 1;
+        fog = fogFactor(dist);
         //Start drawing the walls
         float correctedDist = dist * cos(radiansAdjust(p.a - ra));
         zDepth[r] = correctedDist;
@@ -263,9 +308,11 @@ void drawRays3D(){
             if(mapVal >= 0){
                 float rgb[3] = {1.0};
                 int pixel = ((int)ty * TEXTURE + (int)tx) * 3 + (mapVal*32*32*3);
-                rgb[0] = wallTex[pixel+0] * shade; rgb[1] = wallTex[pixel+1] * shade; rgb[2] = wallTex[pixel+2] * shade;
-                glColor3ub(rgb[0],rgb[1],rgb[2]); glPointSize(PIXELSCALE);
-                glBegin(GL_POINTS); glVertex3i(r*PIXELSCALE,y + lineOffset,0); glEnd();
+                //if(pixel>=0 && pixel < TEXTURE*TEXTURE && pixel+1 < TEXTURE*TEXTURE && pixel+2 < TEXTURE*TEXTURE){
+                    rgb[0] = wall[pixel+0] * shade; rgb[1] = wall[pixel+1] * shade; rgb[2] = wall[pixel+2] * shade;
+                    glColor3ub(rgb[0] * fog,rgb[1] * fog,rgb[2] * fog); glPointSize(PIXELSCALE);
+                    glBegin(GL_POINTS); glVertex3i(r*PIXELSCALE,y + lineOffset,0); glEnd();
+                //}
                 ty+=tyStep;
             }
         }
@@ -278,28 +325,33 @@ void drawRays3D(){
             float floorX = p.x + cos(ra) * actualDistanceToFloor;
             float floorY = p.y + sin(ra) * actualDistanceToFloor;
             int iFloorX = (int)(floorX/CELLSIZE); int iFloorY = (int)(floorY/CELLSIZE);
+            fog = fogFactor(distance(p.x,floorX,p.y,floorY));
             //get tex coords
                 int rgb[3] = {0};
                 if(iFloorX >= 0 && iFloorY >= 0 && iFloorX < mapWidth && iFloorY < mapHeight){
                     int fmapVal = floors[iFloorY][iFloorX];
                     int floorTx = (int)(floorX * TEXTURE  / (CELLSIZE))%TEXTURE; int floorTy = (int)(floorY * TEXTURE / (CELLSIZE))%TEXTURE;
                     int pixel = ((int)floorTy * TEXTURE + (int)floorTx) * 3 + (fmapVal*TEXTURE*TEXTURE*3);
-                    rgb[0] = texturedFloors[pixel+0] * 0.7f;
-                    rgb[1] = texturedFloors[pixel+1] * 0.7f;
-                    rgb[2] = texturedFloors[pixel+2] * 0.7f;
-                    glColor3ub(rgb[0],rgb[1],rgb[2]); glPointSize(PIXELSCALE);
-                    glBegin(GL_POINTS); glVertex3i(r*PIXELSCALE,y,0); glEnd();
+                    //if(pixel>=0 && pixel < TEXTURE*TEXTURE && pixel+1 < TEXTURE*TEXTURE && pixel+2 < TEXTURE*TEXTURE){
+                        rgb[0] = floorTex[pixel+0];
+                        rgb[1] = floorTex[pixel+1] ;
+                        rgb[2] = floorTex[pixel+2];
+                        glColor3ub(rgb[0] * fog,rgb[1] * fog,rgb[2] * fog); glPointSize(PIXELSCALE);
+                        glBegin(GL_POINTS); glVertex3i(r*PIXELSCALE,y,0); glEnd();
+                    //}
                 }
                 //Draw ceiling
                 int cmapVal = ceiling[iFloorY][iFloorX]-1;
                 if(cmapVal >= 0 && iFloorX >= 0 && iFloorY >= 0 && iFloorX < mapWidth && iFloorY < mapHeight) { 
                     int floorTx = (int)(floorX * TEXTURE  / (CELLSIZE))%TEXTURE; int floorTy = (int)(floorY * TEXTURE / (CELLSIZE))%TEXTURE;
                     int pixel = ((int)floorTy * TEXTURE + (int)floorTx) * 3 + (cmapVal*TEXTURE*TEXTURE*3);
-                    rgb[0] = texturedCeiling[pixel+0] * 0.7f;
-                    rgb[1] = texturedCeiling[pixel+1] * 0.7f;
-                    rgb[2] = texturedCeiling[pixel+2] * 0.7f;
-                    glColor3ub(rgb[0],rgb[1],rgb[2]); glPointSize(PIXELSCALE);
-                    glBegin(GL_POINTS); glVertex3i(r*PIXELSCALE,topY - i,0); glEnd();
+                    //if(pixel>=0 && pixel < TEXTURE*TEXTURE && pixel+1 < TEXTURE*TEXTURE && pixel+2 < TEXTURE*TEXTURE){
+                        rgb[0] = texturedCeiling[pixel+0] * 0.7f;
+                        rgb[1] = texturedCeiling[pixel+1] * 0.7f;
+                        rgb[2] = texturedCeiling[pixel+2] * 0.7f;
+                        glColor3ub(rgb[0] * fog,rgb[1] * fog,rgb[2] * fog); glPointSize(PIXELSCALE);
+                        glBegin(GL_POINTS); glVertex3i(r*PIXELSCALE,topY - i,0); glEnd();
+                    //}
                 }
                 i++;
         }
@@ -316,6 +368,7 @@ void ProcessInput(){
     if(glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS){key.down=1;}else{key.down=0;}
     if(glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS){key.left=1;}else{key.left=0;}
     if(glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS){key.right=1;}else{key.right=0;}
+    if(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS){key.shift=1;}else{key.shift=0;}
 }
 
 void frameBufferSizeCallback(GLFWwindow* window,int w,int h){
@@ -348,6 +401,9 @@ void playerUpdate(){
     }
 }
 void playerInput(){
+    if(key.shift==1){ pSpeed = 4.0f; rotSpeed = 6.0f;}
+    else{ pSpeed = 2.0f; rotSpeed = 3.0f;}
+
     if(key.left == 1){ 
         p.t = 0.0f;
         p.state = ROTATING;
@@ -422,7 +478,7 @@ void drawSprite(Sprite* s){
     float transformY = invDet * (-planeY * spriteX + planeX * spriteY); //this is actually the depth inside the screen, that what Z is in 3D
     int spriteScreenX = (int)((PW2) * (1 + transformX / transformY));
     int x,y, sx = 0;
-    int scalingFactor =  (s->width * s->height);
+    int scalingFactor =  (708);
     int scaleX = (s->width*scalingFactor/ transformY);
     int spriteHeight = (s->height*scalingFactor/ transformY);
     int leftX = (spriteScreenX-scaleX/2), rightX = (spriteScreenX+scaleX/2);
@@ -437,11 +493,12 @@ void drawSprite(Sprite* s){
                     int sy = topY;
                     float rgb[3] = {1.0};
                     int pixel = ((int)ty * s->width + (int)(tx)) * 3;
+                    float fog = fogFactor(distance(p.x,s->x,p.y,s->y));
                     rgb[0] = s->tex[pixel+0]; rgb[1] = s->tex[pixel+1]; rgb[2] = s->tex[pixel+2]; 
                     ty+=tyStep; 
                     if(transformY > zDepth[sx/PIXELSCALE]){continue;}
                     if(rgb[0] == 255 && rgb[1] == 0 && rgb[2] == 255){continue;}
-                    glColor3ub(rgb[0],rgb[1],rgb[2]); 
+                    glColor3ub(rgb[0]*fog,rgb[1]*fog,rgb[2]*fog); 
                     glPointSize(PIXELSCALE);
                     glBegin(GL_POINTS); glVertex3i(x,y,1) ;glEnd();
                 }

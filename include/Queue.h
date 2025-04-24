@@ -12,7 +12,7 @@ typedef struct{
 
 // Defining the Queue structure
 typedef struct {
-    VECTOR2I r[MAX_SIZE * MAX_SIZE];
+    VECTOR2I r[128 * 128];
     int front;
     int rear;
 } Queue;
@@ -28,7 +28,7 @@ void initializeQueue(Queue* q)
 bool isEmpty(Queue* q) { return (q->front == q->rear - 1); }
 
 // Function to check if the queue is full
-bool isFull(Queue* q) { return (q->rear == MAX_SIZE); }
+bool isFull(Queue* q) { return (q->rear == 128*128); }
 
 // Function to add an element to the queue (Enqueue
 // operation)
